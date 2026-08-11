@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily chezmoi source-state refresh
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+RandomizedDelaySec=30min
+Unit=dotfiles-sync.service
+
+[Install]
+WantedBy=timers.target

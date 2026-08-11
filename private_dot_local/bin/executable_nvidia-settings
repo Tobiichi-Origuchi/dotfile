@@ -1,0 +1,6 @@
+#!/bin/sh
+
+config="${XDG_CONFIG_HOME:-$HOME/.config}/nvidia/settings-rc"
+mkdir -p "$(dirname "$config")"
+
+exec /usr/bin/nvidia-settings --config="$config" "$@"

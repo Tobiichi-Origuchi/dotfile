@@ -1,0 +1,9 @@
+[Unit]
+Description=Refresh the local chezmoi source state
+Documentation=https://www.chezmoi.io/reference/commands/re-add/
+After=graphical-session.target
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/sync
+TimeoutStartSec=10min

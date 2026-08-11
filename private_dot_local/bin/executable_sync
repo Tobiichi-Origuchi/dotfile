@@ -1,0 +1,340 @@
+#!/bin/bash
+set -Eeuo pipefail
+
+# Keep chezmoi's normal non-private target mode stable. Sensitive files and
+# directories created below receive explicit 0600/0700 permissions.
+umask 022
+
+mode=sync
+if (( $# > 1 )); then
+    printf '%s\n' 'usage: sync [--diff|--commit|--push]' >&2
+    exit 2
+fi
+if (( $# == 1 )); then
+    case $1 in
+        --diff) mode='diff' ;;
+        --commit) mode='commit' ;;
+        --push) mode='push' ;;
+        -h|--help)
+            printf '%s\n' 'usage: sync [--diff|--commit|--push]'
+            printf '%s\n' '  no option   refresh chezmoi and notify only when source state changes'
+            printf '%s\n' '  --diff      refresh, then show pending source-state changes'
+            printf '%s\n' '  --commit    refresh and commit all pending changes locally'
+            printf '%s\n' '  --push      refresh and push committed changes; refuse a dirty tree'
+            exit 0
+            ;;
+        *)
+            printf 'sync: unknown option: %s\n' "$1" >&2
+            exit 2
+            ;;
+    esac
+fi
+
+# A timer may not inherit environment.d, so bind every path to this HOME.
+export XDG_CONFIG_HOME="$HOME/.config"
+export XDG_CACHE_HOME="$HOME/.cache"
+export XDG_DATA_HOME="$HOME/.local/share"
+export XDG_STATE_HOME="$HOME/.local/state"
+export PATH="$HOME/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/bin:$PATH"
+
+for command_name in pacman chezmoi git mktemp sort cmp diff find sha256sum cut; do
+    if ! command -v "$command_name" >/dev/null 2>&1; then
+        printf 'sync: required command not found: %s\n' "$command_name" >&2
+        exit 1
+    fi
+done
+
+source_dir=$(chezmoi execute-template '{{ .chezmoi.sourceDir }}')
+if ! git -C "$source_dir" rev-parse --git-dir >/dev/null 2>&1; then
+    printf 'sync: chezmoi source is not a Git repository: %s\n' "$source_dir" >&2
+    exit 1
+fi
+
+source_fingerprint() {
+    local path
+    (
+        cd "$source_dir"
+        while IFS= read -r -d '' path; do
+            printf '%s\0' "$path"
+            if [[ -L $path ]]; then
+                printf 'link\0%s\0' "$(readlink -- "$path")"
+            else
+                printf 'file\0'
+                sha256sum -- "$path"
+            fi
+        done < <(
+            find . -path './.git' -prune -o \
+                \( -type f -o -type l \) -print0 | LC_ALL=C sort -z
+        )
+    ) | sha256sum | cut -d' ' -f1
+}
+
+before_fingerprint=$(source_fingerprint)
+
+manifest_dir="$XDG_DATA_HOME/dotfiles"
+manifest="$manifest_dir/explicit-packages.txt"
+mkdir -p "$manifest_dir"
+chmod 700 "$manifest_dir"
+
+temporary=$(mktemp "$manifest_dir/.explicit-packages.txt.XXXXXX")
+trap 'rm -f "$temporary"' EXIT HUP INT TERM
+
+LC_ALL=C pacman -Qqe | LC_ALL=C sort -u >"$temporary"
+chmod 600 "$temporary"
+
+if [ -f "$manifest" ] && cmp -s "$temporary" "$manifest"; then
+    rm -f "$temporary"
+else
+    mv "$temporary" "$manifest"
+fi
+trap - EXIT HUP INT TERM
+
+# The first run establishes the encrypted_ source attribute.
+if ! chezmoi source-path "$manifest" >/dev/null 2>&1; then
+    chezmoi add --encrypt "$manifest"
+fi
+
+# Count encrypted targets with real target-state changes for the summary.
+# A normal re-add already skips unchanged encrypted files unless --re-encrypt
+# is requested. Do not filter encrypted entries here: an attribute transition
+# such as encrypted_ -> encrypted_private_ must atomically remove the old
+# source path and write the new one.
+encrypted_update_count=0
+while IFS= read -r status_line; do
+    [[ -n $status_line ]] || continue
+    # Column 1 is actual-vs-last-apply history. Only column 2 means that the
+    # current target differs from the source state and needs to be re-added.
+    [[ ${status_line:1:1} != ' ' ]] || continue
+    encrypted_target=${status_line:3}
+    if [[ -e $encrypted_target || -L $encrypted_target ]]; then
+        ((encrypted_update_count += 1))
+    else
+        printf 'sync: encrypted target is missing and cannot be re-added: %s\n' \
+            "$encrypted_target" >&2
+    fi
+done < <(chezmoi status --include encrypted --exclude scripts --path-style absolute)
+chezmoi re-add
+
+package_count=$(wc -l <"$manifest")
+printf 'sync: recorded %s explicitly installed packages; refreshed %s encrypted target(s)\n' \
+    "$package_count" "$encrypted_update_count"
+
+after_fingerprint=$(source_fingerprint)
+source_updated=0
+if [[ $before_fingerprint != "$after_fingerprint" ]]; then
+    source_updated=1
+fi
+
+show_decrypted_diff() {
+    local path=$1
+    local current_source="$source_dir/$path"
+    local old_exists=0
+    local new_exists=0
+    local diff_status
+    local old_fd old_pid old_status=0
+    local new_fd new_pid new_status=0
+
+    if git -C "$source_dir" cat-file -e "HEAD:$path" 2>/dev/null; then
+        old_exists=1
+    fi
+    if [[ -f $current_source ]]; then
+        new_exists=1
+    fi
+
+    set +e
+    case "$old_exists:$new_exists" in
+        1:1)
+            exec {old_fd}< <(git -C "$source_dir" show "HEAD:$path" | chezmoi decrypt)
+            old_pid=$!
+            exec {new_fd}< <(chezmoi decrypt "$current_source")
+            new_pid=$!
+            diff -u \
+                --label "a/$path (decrypted)" \
+                --label "b/$path (decrypted)" \
+                "/dev/fd/$old_fd" \
+                "/dev/fd/$new_fd"
+            diff_status=$?
+            wait "$old_pid"
+            old_status=$?
+            wait "$new_pid"
+            new_status=$?
+            exec {old_fd}<&-
+            exec {new_fd}<&-
+            ;;
+        0:1)
+            exec {new_fd}< <(chezmoi decrypt "$current_source")
+            new_pid=$!
+            diff -u \
+                --label /dev/null \
+                --label "b/$path (decrypted)" \
+                /dev/null \
+                "/dev/fd/$new_fd"
+            diff_status=$?
+            wait "$new_pid"
+            new_status=$?
+            exec {new_fd}<&-
+            ;;
+        1:0)
+            exec {old_fd}< <(git -C "$source_dir" show "HEAD:$path" | chezmoi decrypt)
+            old_pid=$!
+            diff -u \
+                --label "a/$path (decrypted)" \
+                --label /dev/null \
+                "/dev/fd/$old_fd" \
+                /dev/null
+            diff_status=$?
+            wait "$old_pid"
+            old_status=$?
+            exec {old_fd}<&-
+            ;;
+        *)
+            printf 'sync: encrypted path is absent from both HEAD and the worktree: %s\n' \
+                "$path" >&2
+            set -e
+            return 1
+            ;;
+    esac
+    set -e
+
+    if (( old_status != 0 || new_status != 0 )); then
+        printf 'sync: decryption failed while diffing %s\n' "$path" >&2
+        return 1
+    fi
+
+    case $diff_status in
+        0)
+            printf 'sync: ciphertext-only change; decrypted content is unchanged: %s\n' "$path"
+            ;;
+        1) ;;
+        *)
+            printf 'sync: decrypted diff failed for %s\n' "$path" >&2
+            return "$diff_status"
+            ;;
+    esac
+}
+
+show_diff() {
+    local path
+    local -a tracked_paths=()
+    local -a ordinary_tracked_paths=()
+    local -a ordinary_untracked_paths=()
+    local -a encrypted_paths=()
+    local -a untracked_paths=()
+
+    if [[ -z $(git -C "$source_dir" status --porcelain=v1) ]]; then
+        printf '%s\n' 'sync: no pending source-state changes'
+        return
+    fi
+
+    git -C "$source_dir" status --short
+    if git -C "$source_dir" rev-parse --verify HEAD >/dev/null 2>&1; then
+        mapfile -d '' -t tracked_paths < <(
+            git -C "$source_dir" diff --name-only -z HEAD --
+        )
+        for path in "${tracked_paths[@]}"; do
+            if [[ $path == *.age ]]; then
+                encrypted_paths+=("$path")
+            else
+                ordinary_tracked_paths+=("$path")
+            fi
+        done
+    fi
+
+    mapfile -d '' -t untracked_paths < <(
+        git -C "$source_dir" ls-files --others --exclude-standard -z
+    )
+    for path in "${untracked_paths[@]}"; do
+        if [[ $path == *.age ]]; then
+            encrypted_paths+=("$path")
+        else
+            ordinary_untracked_paths+=("$path")
+        fi
+    done
+
+    if (( ${#ordinary_tracked_paths[@]} != 0 )); then
+        git -C "$source_dir" --no-pager diff --stat HEAD -- \
+            "${ordinary_tracked_paths[@]}"
+        git -C "$source_dir" --no-pager diff --no-ext-diff HEAD -- \
+            "${ordinary_tracked_paths[@]}"
+    fi
+
+    for path in "${ordinary_untracked_paths[@]}"; do
+        git -C "$source_dir" --no-pager diff --no-index -- /dev/null "$source_dir/$path" ||
+            [[ $? -eq 1 ]]
+    done
+
+    for path in "${encrypted_paths[@]}"; do
+        show_decrypted_diff "$path"
+    done
+}
+
+commit_changes() {
+    local path body subject
+    local -a changed_paths=()
+
+    git -C "$source_dir" add -A
+    mapfile -d '' -t changed_paths < <(
+        git -C "$source_dir" diff --cached --name-only -z
+    )
+    if (( ${#changed_paths[@]} == 0 )); then
+        printf '%s\n' 'sync: no pending source-state changes to commit'
+        return
+    fi
+
+    subject="update ${#changed_paths[@]} files"
+    body='Updated files:'
+    for path in "${changed_paths[@]}"; do
+        body+=$'\n- '
+        body+="$path"
+    done
+    git -C "$source_dir" commit -m "$subject" -m "$body"
+}
+
+push_changes() {
+    local branch
+
+    if [[ -n $(git -C "$source_dir" status --porcelain=v1) ]]; then
+        printf '%s\n' 'sync: source state has uncommitted changes; run sync --diff and sync --commit first' >&2
+        exit 1
+    fi
+    if ! git -C "$source_dir" rev-parse --verify HEAD >/dev/null 2>&1; then
+        printf '%s\n' 'sync: there is no local commit to push' >&2
+        exit 1
+    fi
+    if ! git -C "$source_dir" remote get-url origin >/dev/null 2>&1; then
+        printf '%s\n' 'sync: Git remote origin is not configured' >&2
+        exit 1
+    fi
+
+    if git -C "$source_dir" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' >/dev/null 2>&1; then
+        git -C "$source_dir" push
+    else
+        branch=$(git -C "$source_dir" branch --show-current)
+        if [[ -z $branch ]]; then
+            printf '%s\n' 'sync: cannot push a detached HEAD' >&2
+            exit 1
+        fi
+        git -C "$source_dir" push --set-upstream origin "$branch"
+    fi
+}
+
+case $mode in
+    sync)
+        if (( source_updated != 0 )); then
+            pending_count=$(git -C "$source_dir" status --porcelain=v1 | wc -l)
+            if command -v notify-send >/dev/null 2>&1; then
+                notify-send \
+                    --app-name=chezmoi \
+                    --icon=software-update-available \
+                    'Dotfiles changed' \
+                    "chezmoi refreshed ${pending_count} pending path(s). Run sync --diff to review." ||
+                    printf '%s\n' 'sync: source changed, but the desktop notification could not be delivered' >&2
+            else
+                printf '%s\n' 'sync: source changed, but notify-send is unavailable' >&2
+            fi
+        fi
+        ;;
+    diff) show_diff ;;
+    commit) commit_changes ;;
+    push) push_changes ;;
+esac

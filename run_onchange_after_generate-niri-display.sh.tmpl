@@ -1,0 +1,56 @@
+#!/bin/sh
+set -eu
+
+if ! command -v niri >/dev/null 2>&1; then
+    printf '%s\n' 'niri is not installed; install it and run chezmoi apply again' >&2
+    exit 1
+fi
+
+if ! command -v jq >/dev/null 2>&1; then
+    printf '%s\n' 'jq is required to generate the Niri output configuration' >&2
+    exit 1
+fi
+
+if ! outputs=$(niri msg --json outputs); then
+    printf '%s\n' 'cannot query a running Niri session; run chezmoi apply from inside Niri' >&2
+    exit 1
+fi
+
+# Prefer the mode with the largest pixel area, then its highest refresh rate.
+# Preserve the currently active scale for the selected output when available.
+selection=$(printf '%s' "$outputs" | jq -er '
+    [to_entries[] as $output
+     | $output.value.modes[]
+     | {
+         name: $output.key,
+         width: .width,
+         height: .height,
+         refresh_millihz: .refresh_rate,
+         scale: ($output.value.logical.scale // 1.0)
+       }]
+    | sort_by([(.width * .height), .refresh_millihz])
+    | last
+    | [.name, .width, .height, .refresh_millihz, .scale]
+    | @tsv
+')
+
+IFS="$(printf '\t')" read -r output_name width height refresh_millihz scale <<EOF
+$selection
+EOF
+
+refresh=$(awk -v value="$refresh_millihz" 'BEGIN { printf "%.3f", value / 1000 }')
+target="{{ .chezmoi.homeDir }}/.config/niri/cfg/display.kdl"
+mkdir -p "$(dirname "$target")"
+temporary=$(mktemp "${target}.tmp.XXXXXX")
+trap 'rm -f "$temporary"' EXIT HUP INT TERM
+
+{
+    printf '%s\n' '// Generated from niri msg --json outputs by chezmoi.'
+    printf 'output "%s" {\n' "$output_name"
+    printf '    mode "%sx%s@%s"\n' "$width" "$height" "$refresh"
+    printf '    scale %s\n' "$scale"
+    printf '%s\n' '}'
+} >"$temporary"
+
+mv "$temporary" "$target"
+trap - EXIT HUP INT TERM
