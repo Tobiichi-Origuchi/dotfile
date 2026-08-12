@@ -148,7 +148,7 @@ show_decrypted_diff() {
             old_pid=$!
             exec {new_fd}< <(chezmoi decrypt "$current_source")
             new_pid=$!
-            diff -u \
+            diff --color=auto -u \
                 --label "a/$path (decrypted)" \
                 --label "b/$path (decrypted)" \
                 "/dev/fd/$old_fd" \
@@ -164,7 +164,7 @@ show_decrypted_diff() {
         0:1)
             exec {new_fd}< <(chezmoi decrypt "$current_source")
             new_pid=$!
-            diff -u \
+            diff --color=auto -u \
                 --label /dev/null \
                 --label "b/$path (decrypted)" \
                 /dev/null \
@@ -177,7 +177,7 @@ show_decrypted_diff() {
         1:0)
             exec {old_fd}< <(git -C "$source_dir" show "HEAD:$path" | chezmoi decrypt)
             old_pid=$!
-            diff -u \
+            diff --color=auto -u \
                 --label "a/$path (decrypted)" \
                 --label /dev/null \
                 "/dev/fd/$old_fd" \
