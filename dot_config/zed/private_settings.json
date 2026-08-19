@@ -7,6 +7,7 @@
 // custom settings, run `zed: open default settings` from the
 // command palette (cmd-shift-p / ctrl-shift-p)
 {
+  "icon_theme": "Material Icon Theme",
   "format_on_save": "on",
   "cli_default_open_behavior": "new_window",
   "buffer_font_family": "JetBrainsMono Nerd Font",
@@ -22,6 +23,6 @@
   "theme": {
     "mode": "dark",
     "light": "Noctalia Light",
-    "dark": "One Dark",
+    "dark": "One Dark Pro",
   },
 }
