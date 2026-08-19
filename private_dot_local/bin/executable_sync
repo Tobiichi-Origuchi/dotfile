@@ -6,21 +6,30 @@ set -Eeuo pipefail
 umask 022
 
 mode=sync
-if (( $# > 1 )); then
-    printf '%s\n' 'usage: sync [--diff|--commit|--push]' >&2
-    exit 2
-fi
-if (( $# == 1 )); then
+mode_option=
+non_interactive=0
+while (( $# != 0 )); do
     case $1 in
-        --diff) mode='diff' ;;
-        --commit) mode='commit' ;;
-        --push) mode='push' ;;
+        --diff|--commit|--push)
+            if [[ -n $mode_option ]]; then
+                printf 'sync: mode options cannot be combined: %s and %s\n' \
+                    "$mode_option" "$1" >&2
+                exit 2
+            fi
+            mode=${1#--}
+            mode_option=$1
+            ;;
+        --non-interactive)
+            non_interactive=1
+            ;;
         -h|--help)
-            printf '%s\n' 'usage: sync [--diff|--commit|--push]'
+            printf '%s\n' 'usage: sync [--diff|--commit|--push] [--non-interactive]'
             printf '%s\n' '  no option   refresh chezmoi and notify only when source state changes'
             printf '%s\n' '  --diff      refresh, then show pending source-state changes'
             printf '%s\n' '  --commit    refresh and commit all pending changes locally'
             printf '%s\n' '  --push      refresh and push committed changes; refuse a dirty tree'
+            printf '%s\n' '  --non-interactive'
+            printf '%s\n' '              keep missing targets managed without prompting'
             exit 0
             ;;
         *)
@@ -28,7 +37,8 @@ if (( $# == 1 )); then
             exit 2
             ;;
     esac
-fi
+    shift
+done
 
 # A timer may not inherit environment.d, so bind every path to this HOME.
 export XDG_CONFIG_HOME="$HOME/.config"
@@ -89,10 +99,50 @@ else
 fi
 trap - EXIT HUP INT TERM
 
-# The first run establishes the encrypted_ source attribute.
-if ! chezmoi source-path "$manifest" >/dev/null 2>&1; then
-    chezmoi add --encrypt "$manifest"
+# The package manifest is intentionally stored as ordinary plaintext in the
+# source state. Migrate an older encrypted entry automatically.
+manifest_source=$(chezmoi source-path "$manifest" 2>/dev/null || true)
+if [[ -z $manifest_source || $manifest_source == *.age ]]; then
+    chezmoi add "$manifest"
 fi
+
+missing_count=0
+forgotten_count=0
+mapfile -d '' -t managed_targets < <(
+    chezmoi managed \
+        --include files,symlinks \
+        --path-style absolute \
+        --nul-path-separator
+)
+for managed_target in "${managed_targets[@]}"; do
+    [[ ! -e $managed_target && ! -L $managed_target ]] || continue
+    missing_count=$((missing_count + 1))
+
+    if (( non_interactive != 0 )); then
+        printf 'sync: managed target is missing; keeping its source entry: %s\n' \
+            "$managed_target" >&2
+        continue
+    fi
+
+    printf 'sync: managed target is missing: %s\n' "$managed_target" >&2
+    printf '%s' 'Remove it from the chezmoi source state? [y/N] ' >&2
+    answer=
+    if ! IFS= read -r answer; then
+        answer=
+    fi
+    case $answer in
+        y|Y|yes|Yes|YES)
+            chezmoi --force forget "$managed_target"
+            forgotten_count=$((forgotten_count + 1))
+            printf 'sync: removed missing target from the source state: %s\n' \
+                "$managed_target"
+            ;;
+        *)
+            printf 'sync: kept missing target in the source state: %s\n' \
+                "$managed_target"
+            ;;
+    esac
+done
 
 # Count encrypted targets with real target-state changes for the summary.
 # A normal re-add already skips unchanged encrypted files unless --re-encrypt
@@ -108,16 +158,13 @@ while IFS= read -r status_line; do
     encrypted_target=${status_line:3}
     if [[ -e $encrypted_target || -L $encrypted_target ]]; then
         ((encrypted_update_count += 1))
-    else
-        printf 'sync: encrypted target is missing and cannot be re-added: %s\n' \
-            "$encrypted_target" >&2
     fi
 done < <(chezmoi status --include encrypted --exclude scripts --path-style absolute)
 chezmoi re-add
 
 package_count=$(wc -l <"$manifest")
-printf 'sync: recorded %s explicitly installed packages; refreshed %s encrypted target(s)\n' \
-    "$package_count" "$encrypted_update_count"
+printf 'sync: recorded %s explicitly installed packages; refreshed %s encrypted target(s); found %s missing target(s), forgot %s\n' \
+    "$package_count" "$encrypted_update_count" "$missing_count" "$forgotten_count"
 
 after_fingerprint=$(source_fingerprint)
 source_updated=0
