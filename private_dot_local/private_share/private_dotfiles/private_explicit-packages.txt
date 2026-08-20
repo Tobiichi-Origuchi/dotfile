@@ -47,11 +47,13 @@ ethtool
 exfatprogs
 fcitx5-rime
 fcitx5-skin-ori-git
+fd
 ffmpegthumbnailer
 foot
 freerdp
 git
 github-cli
+gnome-text-editor
 gpu-screen-recorder
 greetd-tuigreety-git
 gst-libav
@@ -71,6 +73,7 @@ linux-cachyos-nvidia-open
 linux-firmware
 localsend
 logrotate
+loupe
 man-db
 man-pages
 mangohud
@@ -84,7 +87,8 @@ mission-center
 mkinitcpio
 mkinitcpio-sd-numlock
 mold
-netease-cloud-music-gtk-bin
+nautilus-image-converter
+netease-cloud-music-gtk4-git
 networkmanager
 noto-fonts
 noto-fonts-cjk

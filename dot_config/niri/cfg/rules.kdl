@@ -5,7 +5,7 @@
 
     window-rule {
         background-effect {
-          blur true
+          blur false
           xray false
         }
     }

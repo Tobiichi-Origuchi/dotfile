@@ -1,0 +1,25 @@
+#!/bin/sh
+
+REAL_DATA_HOME="${XDG_DATA_HOME:-"$HOME/.local/share"}"
+
+STEAM_ROOT="$REAL_DATA_HOME/Steam"
+STEAM_HOME="$STEAM_ROOT/.home"
+
+mkdir -p \
+    "$STEAM_HOME/.config" \
+    "$STEAM_HOME/.cache" \
+    "$STEAM_HOME/.local/share" \
+    "$STEAM_HOME/.local/state"
+
+if [ ! -e "$STEAM_HOME/.local/share/Steam" ]; then
+    ln -s ../../.. "$STEAM_HOME/.local/share/Steam"
+fi
+
+export HOME="$STEAM_HOME"
+
+export XDG_CONFIG_HOME="$STEAM_HOME/.config"
+export XDG_CACHE_HOME="$STEAM_HOME/.cache"
+export XDG_DATA_HOME="$STEAM_HOME/.local/share"
+export XDG_STATE_HOME="$STEAM_HOME/.local/state"
+
+exec /usr/bin/steam "$@"
