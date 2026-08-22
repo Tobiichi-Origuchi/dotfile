@@ -3,8 +3,3 @@ rustflags = [
     "-C", "link-arg=-fuse-ld=mold",
     "-C", "target-cpu=native",
 ]
-
-[profile.release]
-lto = "thin"
-codegen-units = 1
-strip = true

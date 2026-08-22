@@ -111,7 +111,9 @@ pipewire-pulse
 pkgfile
 plocate
 plymouth
+pods
 power-profiles-daemon
+prismlauncher
 proton-cachyos-slr
 protonplus
 python
@@ -153,6 +155,7 @@ vulkan-profiles
 vulkan-radeon
 vulkan-utility-libraries
 vulkan-validation-layers
+waylyrics-layer-shell-git
 wget
 wireplumber
 xdg-user-dirs
