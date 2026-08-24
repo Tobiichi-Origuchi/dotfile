@@ -56,8 +56,6 @@ github-cli
 gnome-text-editor
 gpu-screen-recorder
 greetd-tuigreety-git
-gst-libav
-gst-plugin-va
 gtk4-layer-shell
 inter-font
 kazumi-bin

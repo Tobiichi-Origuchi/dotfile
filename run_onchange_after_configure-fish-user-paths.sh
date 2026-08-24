@@ -13,6 +13,7 @@ export MISE_CARGO_HOME="$XDG_DATA_HOME/cargo"
 export MISE_RUSTUP_HOME="$XDG_DATA_HOME/rustup"
 export CARGO_HOME="$MISE_CARGO_HOME"
 export RUSTUP_HOME="$MISE_RUSTUP_HOME"
+export ANDROID_HOME="$XDG_DATA_HOME/Android/Sdk"
 
 cd "$HOME"
 
@@ -23,4 +24,4 @@ fi
 
 # Keep this list as the source of truth for the universal fish_user_paths.
 # shellcheck disable=SC2016 # $HOME is intentionally expanded by fish.
-fish -c 'set -U fish_user_paths "$HOME/.local/share/cargo/bin" "$HOME/.local/bin"'
+fish -c 'set -U fish_user_paths "$CARGO_HOME/bin" "$HOME/.local/bin" "$ANDROID_HOME/tools" "$ANDROID_HOME/tools/bin" "$ANDROID_HOME/platform-tools"'

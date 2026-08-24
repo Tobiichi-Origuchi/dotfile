@@ -17,7 +17,7 @@ color-link underlined "#5e81ac"
 color-link error "#bf616a"
 color-link todo "#5e81ac"
 
-color-link selection "#dfecec,#2e6b69"
+color-link selection "#dfecec,#316867"
 color-link cursor-line "#2e3440"
 color-link line-number "#727d94"
 color-link current-line-number "#eceff4"
@@ -38,7 +38,7 @@ color-link diff-modified "#88c0d0"
 color-link diff-deleted "#bf616a"
 
 color-link message "#eceff4,#3b4252"
-color-link error-message "#2e3440,#56171d"
+color-link error-message "#2e3440,#531b20"
 
 color-link indent-char "#727d94"
 color-link color-column "#343b49"
