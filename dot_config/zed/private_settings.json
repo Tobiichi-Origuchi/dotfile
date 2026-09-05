@@ -25,4 +25,12 @@
     "light": "Noctalia Light",
     "dark": "One Dark Pro",
   },
+  "lsp": {
+    "dart": {
+      "binary": {
+        "path": "/home/origuchi/.cache/fvm/versions/3.47.2/bin/dart",
+        "arguments": ["language-server", "--protocol=lsp"],
+      },
+    },
+  },
 }

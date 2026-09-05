@@ -21,10 +21,10 @@ binds {
     Mod+Shift+Q                         hotkey-overlay-title="Session Menu: noctalia sessionMenu" { spawn-sh "noctalia msg panel-toggle session"; }
 
     // Please set the text editor of your choice.
-    // Mod+Shift+E                               hotkey-overlay-title="Open Text Editor: Zed" { spawn "zeditor"; }
+    Mod+Shift+E                               hotkey-overlay-title="Open Text Editor: Cosmic Editor" { spawn "cosmic-edit"; }
 
     // Please choose your own file manager.
-    Mod+E                               hotkey-overlay-title="File Manager: Nautilus" { spawn "nautilus"; }
+    Mod+E                               hotkey-overlay-title="File Manager: Cosmic Files" { spawn "cosmic-files"; }
 
     // ─── Media Controls ───
     XF86AudioRaiseVolume                allow-when-locked=true { spawn-sh "noctalia msg volume-up"; }
