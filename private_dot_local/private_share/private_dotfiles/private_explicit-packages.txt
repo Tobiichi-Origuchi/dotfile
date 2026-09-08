@@ -23,11 +23,9 @@ cachyos-settings
 cachyos-snapper-support
 cachyos-v4-mirrorlist
 chezmoi
+clang
 clash-verge-rev-bin
 cmake
-cosmic-files
-cosmic-icon-theme
-cosmic-text-editor
 diffutils
 dosfstools
 e2fsprogs
@@ -40,6 +38,7 @@ freerdp
 fvm
 git
 github-cli
+gnome-text-editor
 gpu-screen-recorder
 gtk4-layer-shell
 inter-font
@@ -49,9 +48,9 @@ libva-nvidia-driver
 limine
 limine-mkinitcpio-hook
 limine-snapper-sync
-linux-cachyos
-linux-cachyos-headers
-linux-cachyos-nvidia-open
+linux-cachyos-bore
+linux-cachyos-bore-headers
+linux-cachyos-bore-nvidia-open
 linux-firmware
 localsend
 logrotate
@@ -63,6 +62,7 @@ mesa-utils
 micro
 mission-center
 mkinitcpio
+modprobed-db
 mold
 networkmanager
 noctalia-greeter
@@ -73,6 +73,7 @@ nvidia-utils
 opencode
 openssh
 pacman-contrib
+paru
 pavucontrol
 piliplus-bin
 pipewire-alsa
@@ -81,14 +82,15 @@ pkgfile
 plocate
 plymouth
 power-profiles-daemon
+prismlauncher
 proton-cachyos-slr
 protonplus
 python
+qcad
 realtime-privileges
 rebuild-detector
 ripgrep
 rsync
-shelly
 smartmontools
 snapper
 sof-firmware
