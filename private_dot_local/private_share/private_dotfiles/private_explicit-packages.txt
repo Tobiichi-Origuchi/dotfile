@@ -89,8 +89,10 @@ python
 qcad
 realtime-privileges
 rebuild-detector
+rime-ice-pinyin-git
 ripgrep
 rsync
+seahorse
 smartmontools
 snapper
 sof-firmware
