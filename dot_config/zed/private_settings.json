@@ -7,17 +7,29 @@
 // custom settings, run `zed: open default settings` from the
 // command palette (cmd-shift-p / ctrl-shift-p)
 {
+  "agent": {
+    "dock": "right",
+    "favorite_models": [],
+    "model_parameters": []
+  },
+  "edit_predictions": {
+    "ollama": {
+      "api_url": "http://localhost:11434"
+    },
+    "provider": "zed"
+  },
   "agent_servers": {
-    "antigravity-acp": {
+    "codex-acp": {
       "default_config_options": {
-        "mode": "yolo",
-        "model": "gemini-3.8-flash-high"
+        "fast-mode": false,
+        "model": "gpt-6.1-sol",
+        "mode": "agent-full-access"
       },
       "type": "registry"
     }
   },
   "icon_theme": "Material Icon Theme",
-  "format_on_save": "on",
+  "format_on_save": "off",
   "cli_default_open_behavior": "new_window",
   "buffer_font_family": "JetBrainsMono Nerd Font",
   "ui_font_family": ".ZedSans",
@@ -32,12 +44,12 @@
   "theme": {
     "mode": "dark",
     "light": "One Dark Pro",
-    "dark": "One Dark Pro",
+    "dark": "Nord Dark",
   },
   "lsp": {
     "dart": {
       "binary": {
-        "path": ".fvm/flutter_sdk/bin/dart",
+        "path": "dart",
         "arguments": ["language-server", "--protocol=lsp"],
       },
     },
